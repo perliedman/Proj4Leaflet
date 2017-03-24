@@ -87,7 +87,13 @@
 			this.code = code;
 			this.transformation = this.options.transformation;
 
-			if (this.options.origin) {
+			if (this.options.origins) {
+				this._transformations = [];
+				for (i = 0; i < this.options.origins.length; i++) {
+					var origin = this.options.origins[i];
+					this._transformations.push(new L.Transformation(1, -origin[0], -1, origin[1]));
+				}
+			} else if (this.options.origin) {
 				this.transformation =
 					new L.Transformation(1, -this.options.origin[0],
 						-1, this.options.origin[1]);
@@ -104,8 +110,8 @@
 				}
 			}
 
-			this.infinite = !this.options.bounds;
-
+			this.infinite = !!this.options.bounds;
+			this.noWrap = true;
 		},
 
 		scale: function(zoom) {
@@ -145,6 +151,36 @@
 			}
 			scaleDiff = nextScale - downScale;
 			return (scale - downScale) / scaleDiff + downZoom;
+		},
+
+		latLngToPoint: function(latlng, zoom) {
+			var transformation = this._transformations ?
+			        this._transformations[Math.round(zoom)] : this.transformation,
+			    projectedPoint = this.projection.project(latlng),
+			    scale = this.scale(zoom);
+
+			return transformation._transform(projectedPoint, scale);
+		},
+
+		pointToLatLng: function(point, zoom) {
+			var transformation = this._transformations ?
+			        this._transformations[Math.round(zoom)] : this.transformation,
+			    scale = this.scale(zoom),
+			    untransformedPoint = transformation.untransform(point, scale);
+
+			return this.projection.unproject(untransformedPoint);
+		},
+
+		getProjectedBounds: function (zoom) {
+			if (this.infinite) { return null; }
+
+			var b = this.projection.bounds,
+			    s = this.scale(zoom),
+			    transformation = this._transformations ? this._transformations[Math.round(zoom)] : this.transformation,
+			    min = transformation.transform(b.min, s),
+			    max = transformation.transform(b.max, s);
+
+			return new Bounds(min, max);
 		},
 
 		distance: L.CRS.Earth.distance,
